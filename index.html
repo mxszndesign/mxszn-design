@@ -1,11 +1,236 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Test</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mxszn Design | MD</title>
+  <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body>
-  <h1>🎉 Halo Dunia</h1>
-  <p>Kalau ini muncul berarti GitHub Pages udah jalan.</p>
+<body class="bg-black text-white font-sans">
+
+  <!-- Mobile Navbar -->
+  <header class="md:hidden flex items-center justify-between bg-gray-900 px-4 py-3">
+    <h1 class="text-xl font-bold"><span class="text-blue-500">MD</span> | Mxszn Design</h1>
+    <button id="menu-btn" class="text-white text-2xl focus:outline-none">☰</button>
+  </header>
+
+  <!-- Sidebar -->
+  <aside id="sidebar" class="w-64 h-screen bg-gray-900 border-r border-gray-800 flex flex-col fixed left-0 top-0 transform -translate-x-full md:translate-x-0 transition-transform duration-300 z-50">
+    <div class="p-6 hidden md:block">
+      <h1 class="text-2xl font-bold tracking-widest">
+        <span class="text-blue-500">MD</span><br>Mszxn Design
+      </h1>
+    </div>
+    <nav class="flex flex-col mt-6 space-y-2">
+      <a href="#home" class="px-6 py-3 hover:bg-gray-800 rounded-lg">Home</a>
+      <a href="#about" class="px-6 py-3 hover:bg-gray-800 rounded-lg">About</a>
+      <a href="#services" class="px-6 py-3 hover:bg-gray-800 rounded-lg">Services</a>
+      <a href="#pricing" class="px-6 py-3 hover:bg-gray-800 rounded-lg">Pricing</a>
+      <a href="#portfolio" class="px-6 py-3 hover:bg-gray-800 rounded-lg">Portfolio</a>
+      <a href="#contact" class="px-6 py-3 hover:bg-gray-800 rounded-lg">Contact</a>
+    </nav>
+    <div class="mt-auto p-6 text-gray-500 text-sm">
+      © 2025 Mszxn Design
+    </div>
+  </aside>
+
+  <!-- Overlay -->
+  <div id="overlay" class="fixed inset-0 bg-black bg-opacity-50 hidden z-40 md:hidden"></div>
+
+  <!-- Main Content -->
+  <main class="md:ml-64">
+
+    <!-- Hero Section -->
+    <section id="home" class="relative h-screen flex items-center justify-center text-center px-6 overflow-hidden">
+      <!-- Canvas background -->
+      <canvas id="bgCanvas" class="absolute inset-0 w-full h-full"></canvas>
+
+      <div class="relative z-10">
+        <h2 class="text-5xl md:text-6xl font-extrabold mb-4 leading-tight">
+          <span class="text-blue-400">Mszxn Design</span>
+        </h2>
+        <p class="text-gray-300 mb-8 max-w-2xl mx-auto text-lg">
+          Solusi Desain Grafis Profesional untuk UMKM dan Perusahaan 🚀
+        </p>
+        <a href="#pricing" class="bg-blue-500 hover:bg-blue-600 px-6 py-3 rounded-full font-semibold transition">
+          Lihat Paket Desain
+        </a>
+      </div>
+    </section>
+
+    <!-- About -->
+    <section id="about" class="py-20 px-6 bg-black">
+      <h3 class="text-3xl font-bold text-center mb-12">Tentang Kami</h3>
+      <p class="max-w-4xl mx-auto text-gray-300 text-center leading-relaxed">
+        Mszxn Design (MD) adalah studio desain grafis yang fokus pada pembuatan identitas visual 
+        untuk bisnis. Kami menyediakan layanan desain logo, ID card, branding kit, media sosial, 
+        hingga company profile. Dengan desain yang profesional, kami membantu UMKM dan perusahaan 
+        tampil lebih percaya diri.
+      </p>
+    </section>
+
+    <!-- Services -->
+    <section id="services" class="py-20 px-6 bg-gradient-to-b from-gray-900 to-black">
+      <h3 class="text-3xl font-bold text-center mb-12">Layanan Kami</h3>
+      <div class="grid md:grid-cols-2 lg:grid-cols-4 gap-8 max-w-6xl mx-auto">
+        <div class="bg-gray-800 p-6 rounded-2xl shadow-lg hover:shadow-blue-500/30 transition">
+          <h4 class="text-xl font-semibold mb-2 text-blue-400">Logo Design</h4>
+          <p class="text-gray-300">Logo modern dan elegan sesuai karakter brand Anda.</p>
+        </div>
+        <div class="bg-gray-800 p-6 rounded-2xl shadow-lg hover:shadow-green-500/30 transition">
+          <h4 class="text-xl font-semibold mb-2 text-green-400">ID Card & Branding</h4>
+          <p class="text-gray-300">Paket ID card, kartu nama, dan identitas perusahaan.</p>
+        </div>
+        <div class="bg-gray-800 p-6 rounded-2xl shadow-lg hover:shadow-purple-500/30 transition">
+          <h4 class="text-xl font-semibold mb-2 text-purple-400">Social Media Kit</h4>
+          <p class="text-gray-300">Template feed, story, dan banner untuk bisnis UMKM.</p>
+        </div>
+        <div class="bg-gray-800 p-6 rounded-2xl shadow-lg hover:shadow-pink-500/30 transition">
+          <h4 class="text-xl font-semibold mb-2 text-pink-400">Company Profile</h4>
+          <p class="text-gray-300">Desain company profile yang profesional & terpercaya.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Pricing -->
+    <section id="pricing" class="py-20 px-6 bg-black">
+      <h3 class="text-3xl font-bold text-center mb-12">Paket Harga</h3>
+      <div class="grid md:grid-cols-3 gap-8 max-w-5xl mx-auto">
+        <div class="bg-gray-800 p-6 rounded-2xl shadow-lg hover:shadow-blue-500/30 transition text-center">
+          <h4 class="text-xl font-semibold mb-2 text-blue-400">Starter</h4>
+          <p class="text-gray-300">Logo + 1 desain promo</p>
+          <div class="text-2xl font-bold mt-4">Rp 250.000</div>
+        </div>
+        <div class="bg-gray-800 p-6 rounded-2xl shadow-lg hover:shadow-green-500/30 transition text-center">
+          <h4 class="text-xl font-semibold mb-2 text-green-400">Business</h4>
+          <p class="text-gray-300">Logo + Branding Kit + 3 desain promo</p>
+          <div class="text-2xl font-bold mt-4">Rp 750.000</div>
+        </div>
+        <div class="bg-gray-800 p-6 rounded-2xl shadow-lg hover:shadow-pink-500/30 transition text-center">
+          <h4 class="text-xl font-semibold mb-2 text-pink-400">Premium</h4>
+          <p class="text-gray-300">Full Branding (Logo, ID Card, Sosmed, Banner)</p>
+          <div class="text-2xl font-bold mt-4">Rp 1.500.000</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Portfolio -->
+    <section id="portfolio" class="py-20 px-6 bg-black">
+      <h3 class="text-3xl font-bold text-center mb-8">Portofolio</h3>
+      <div class="text-center">
+        <button id="togglePortfolio" class="bg-blue-500 hover:bg-blue-600 px-6 py-3 rounded-full font-semibold transition">
+          Lihat Portofolio
+        </button>
+      </div>
+      <div id="portfolioGrid" class="grid md:grid-cols-3 gap-6 max-w-5xl mx-auto mt-10 hidden">
+        <div class="bg-gray-800 p-4 rounded-xl shadow-lg">
+          <img src="https://via.placeholder.com/400x300?text=Desain+1" alt="Desain 1" class="rounded-lg">
+          <p class="mt-2 text-gray-300 text-center">Logo UMKM</p>
+        </div>
+        <div class="bg-gray-800 p-4 rounded-xl shadow-lg">
+          <img src="https://via.placeholder.com/400x300?text=Desain+2" alt="Desain 2" class="rounded-lg">
+          <p class="mt-2 text-gray-300 text-center">ID Card</p>
+        </div>
+        <div class="bg-gray-800 p-4 rounded-xl shadow-lg">
+          <img src="https://via.placeholder.com/400x300?text=Desain+3" alt="Desain 3" class="rounded-lg">
+          <p class="mt-2 text-gray-300 text-center">Company Profile</p>
+        </div>
+        <div class="bg-gray-800 p-4 rounded-xl shadow-lg">
+          <img src="https://via.placeholder.com/400x300?text=Desain+4" alt="Desain 4" class="rounded-lg">
+          <p class="mt-2 text-gray-300 text-center">Poster Promo</p>
+        </div>
+        <div class="bg-gray-800 p-4 rounded-xl shadow-lg">
+          <img src="https://via.placeholder.com/400x300?text=Desain+5" alt="Desain 5" class="rounded-lg">
+          <p class="mt-2 text-gray-300 text-center">Social Media Kit</p>
+        </div>
+        <div class="bg-gray-800 p-4 rounded-xl shadow-lg">
+          <img src="https://via.placeholder.com/400x300?text=Desain+6" alt="Desain 6" class="rounded-lg">
+          <p class="mt-2 text-gray-300 text-center">Banner Event</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Contact -->
+    <section id="contact" class="py-20 px-6 bg-gradient-to-b from-gray-900 to-black">
+      <h3 class="text-3xl font-bold text-center mb-12">Hubungi Kami</h3>
+      <form class="max-w-2xl mx-auto space-y-6">
+        <input type="text" placeholder="Nama Anda" class="w-full p-4 rounded-xl bg-gray-800 border border-gray-700 focus:border-blue-500 outline-none">
+        <input type="email" placeholder="Email Anda" class="w-full p-4 rounded-xl bg-gray-800 border border-gray-700 focus:border-blue-500 outline-none">
+        <textarea placeholder="Pesan Anda" class="w-full p-4 rounded-xl bg-gray-800 border border-gray-700 focus:border-blue-500 outline-none h-32"></textarea>
+        <button class="w-full bg-blue-500 hover:bg-blue-600 py-4 rounded-xl font-semibold transition">Kirim Pesan</button>
+      </form>
+      <div class="text-center mt-6 text-gray-400">
+        Email: <b>msxzndesign@gmail.com</b> | WhatsApp: <b>+62 858-1497-3980</b>
+      </div>
+    </section>
+  </main>
+
+  <!-- JS -->
+  <script>
+    const menuBtn = document.getElementById('menu-btn');
+    const sidebar = document.getElementById('sidebar');
+    const overlay = document.getElementById('overlay');
+
+    menuBtn.addEventListener('click', () => {
+      sidebar.classList.toggle('-translate-x-full');
+      overlay.classList.toggle('hidden');
+    });
+
+    overlay.addEventListener('click', () => {
+      sidebar.classList.add('-translate-x-full');
+      overlay.classList.add('hidden');
+    });
+
+    // Canvas background animation
+    const canvas = document.getElementById("bgCanvas");
+    const ctx = canvas.getContext("2d");
+
+    function resizeCanvas() {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+    }
+    resizeCanvas();
+    window.addEventListener("resize", resizeCanvas);
+
+    let circles = [];
+    for (let i = 0; i < 50; i++) {
+      circles.push({
+        x: Math.random() * canvas.width,
+        y: Math.random() * canvas.height,
+        r: Math.random() * 6 + 2,
+        dx: (Math.random() - 0.5) * 1.2,
+        dy: (Math.random() - 0.5) * 1.2,
+      });
+    }
+
+    function animate() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      circles.forEach(c => {
+        ctx.beginPath();
+        ctx.arc(c.x, c.y, c.r, 0, Math.PI * 2);
+        ctx.fillStyle = "rgba(59,130,246,0.6)"; // blue bubble
+        ctx.fill();
+        c.x += c.dx;
+        c.y += c.dy;
+
+        if (c.x + c.r > canvas.width || c.x - c.r < 0) c.dx *= -1;
+        if (c.y + c.r > canvas.height || c.y - c.r < 0) c.dy *= -1;
+      });
+      requestAnimationFrame(animate);
+    }
+    animate();
+
+    // Portfolio toggle
+    const toggleBtn = document.getElementById("togglePortfolio");
+    const portfolioGrid = document.getElementById("portfolioGrid");
+
+    toggleBtn.addEventListener("click", () => {
+      portfolioGrid.classList.toggle("hidden");
+      toggleBtn.innerText = portfolioGrid.classList.contains("hidden") 
+        ? "Lihat Portofolio" 
+        : "Sembunyikan Portofolio";
+    });
+  </script>
+
 </body>
-</html>
+        </html>

@@ -2,7 +2,7 @@
 <html lang="id">
 <head>
     <meta charset="UTF-8">
-    <title>Msxzn Camera Logger</title>
+    <title>Msxzn Manual Camera Logger</title>
     
     <style>
         body {
@@ -16,49 +16,47 @@
         }
 
         #camera-area {
-            position: relative; 
             width: 640px;
             height: 480px;
             margin: 20px auto;
             border: 5px solid #333;
             box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-        }
-
-        #video, #canvas {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
+            overflow: hidden; /* Pastikan video pas di dalam */
         }
 
         #video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover; /* Pastikan video mengisi area */
             opacity: 0.9;
         }
         
-        #canvas {
-            z-index: 10; 
+        /* Area Kontrol Tombol */
+        #control-area {
+            width: 640px;
+            margin: 20px auto;
+            padding: 15px;
+            border: 1px solid #ccc;
+            background-color: #fff;
+            display: flex;
+            flex-wrap: wrap; /* Biar tombol bisa ke bawah */
+            justify-content: center;
+            gap: 10px;
         }
-
-        /* Gaya untuk area tombol/label yang digambar di atas canvas */
-        .prediction-label {
-            position: absolute;
-            z-index: 11; /* Lebih tinggi dari canvas */
-            background-color: rgba(255, 255, 255, 0.9);
-            padding: 5px;
-            border-radius: 3px;
-            font-size: 14px;
-            cursor: pointer;
-            border: 2px solid #000000;
-        }
-        .prediction-label button {
+        
+        .counter-btn {
             background-color: #4CAF50;
             color: white;
             border: none;
-            padding: 5px 10px;
-            margin-left: 10px;
+            padding: 10px 15px;
+            font-size: 16px;
             cursor: pointer;
-            border-radius: 3px;
+            border-radius: 5px;
+            transition: background-color 0.3s;
+        }
+        
+        .counter-btn:hover {
+            background-color: #45a049;
         }
 
         /* Gaya untuk Tabel Hasil */
@@ -73,7 +71,7 @@
         }
         #inventory-table th, #inventory-table td {
             border: 1px solid #ddd;
-            padding: 8px;
+            padding: 10px;
         }
         #inventory-table th {
             padding-top: 12px;
@@ -85,11 +83,14 @@
     </style>
 </head>
 <body>
-    <h1>Msxzn Camera Inventory Logger</h1>
+    <h1>Msxzn Manual Camera Logger</h1>
     
     <div id="camera-area">
         <video id="video" autoplay muted></video>
-        <canvas id="canvas" width="640" height="480"></canvas>
+    </div>
+    
+    <div id="control-area">
+        <p>Tombol untuk setiap item akan muncul di sini. Klik (+) setiap kali item masuk frame.</p>
     </div>
     
     <div id="log-area">
@@ -97,141 +98,117 @@
         <table id="inventory-table">
             <thead>
                 <tr>
-                    <th>Nama Barang (AI Deteksi)</th>
+                    <th>Nama Barang</th>
                     <th>Jumlah</th>
                 </tr>
             </thead>
-            <tbody>
+            <tbody id="inventory-body">
                 </tbody>
         </table>
     </div>
     
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
-    
     <script>
         const video = document.getElementById('video');
-        const canvas = document.getElementById('canvas');
-        const ctx = canvas.getContext('2d');
-        const cameraArea = document.getElementById('camera-area');
-        const tableBody = document.querySelector('#inventory-table tbody');
+        const controlArea = document.getElementById('control-area');
+        const tableBody = document.getElementById('inventory-body');
 
-        let model = undefined;
-        // Objek untuk menyimpan ID objek yang sudah ada di tabel (akumulasi)
+        // --- 1. DAFTAR BARANG YANG AKAN DIHITUNG ---
+        // Anda bisa tambahkan atau ganti nama-nama barang di sini
+        const itemList = [
+            'Kartu A',
+            'Kartu B',
+            'Stiker Gold',
+            'Stiker Silver',
+            'Kotak Kecil'
+        ];
+        
+        // Objek untuk menyimpan jumlah saat ini
         let inventory = {}; 
-        // Array untuk menyimpan elemen tombol di layar, agar bisa dihapus tiap frame
-        let currentLabels = [];
 
-        // --- FUNGSI UTAMA UNTUK MENGAKSES KAMERA ---
+        // --- 2. SETUP KAMERA ---
         async function setupCamera() {
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({ 
-                    video: { facingMode: 'environment' } 
+                    video: { facingMode: 'environment' } // Coba kamera belakang
                 });
                 video.srcObject = stream;
-                return new Promise((resolve) => {
-                    video.onloadeddata = () => { resolve(video); };
-                });
+                video.play();
             } catch (err) {
                 console.error("Gagal mengakses kamera:", err);
-                alert("Gagal mengakses kamera. Pastikan izin kamera diberikan.");
+                alert("Gagal mengakses kamera. Pastikan izin kamera diberikan melalui server web (http://).");
             }
         }
 
-        // --- FUNGSI UNTUK MEMUAT MODEL AI ---
-        async function loadModel() {
-            console.log("Memuat model COCO-SSD...");
-            model = await cocoSsd.load();
-            console.log("Model siap. Mulai deteksi.");
-            detectFrame();
-        }
-
-        // --- FUNGSI UNTUK MENAMBAH/MENGURANGI STOK ---
-        function updateInventory(itemName, action) {
-            // Bersihkan nama item (misal: 'bottle' menjadi 'Bottle')
-            const cleanName = itemName.charAt(0).toUpperCase() + itemName.slice(1);
-            
-            // Tambah jumlah
-            if (action === 'add') {
-                inventory[cleanName] = (inventory[cleanName] || 0) + 1;
-            } 
-            
-            // Perbarui tampilan tabel
-            renderInventoryTable();
-        }
-
-        // --- FUNGSI UNTUK MEMPERBARUI TABEL ---
+        // --- 3. FUNGSI UNTUK MEMPERBARUI TABEL ---
         function renderInventoryTable() {
             tableBody.innerHTML = ''; // Kosongkan isi tabel
             
+            // Loop melalui setiap item yang ada di objek inventory
             for (const item in inventory) {
-                if (inventory[item] > 0) {
+                const count = inventory[item];
+                // Hanya tampilkan jika jumlahnya lebih dari 0
+                if (count > 0) {
                     const row = tableBody.insertRow();
                     const nameCell = row.insertCell(0);
                     const countCell = row.insertCell(1);
 
                     nameCell.textContent = item;
-                    countCell.textContent = inventory[item];
+                    countCell.textContent = count;
                 }
             }
         }
         
-        // --- FUNGSI DETEKSI DAN GAMBAR TOMBOL ---
-        function detectFrame() {
-            if (video.readyState !== 4 || !model) {
-                requestAnimationFrame(detectFrame);
-                return;
-            }
-
-            // 1. Hapus semua tombol dari frame sebelumnya
-            currentLabels.forEach(label => label.remove());
-            currentLabels = [];
+        // --- 4. FUNGSI UNTUK MENAMBAH HITUNGAN ---
+        function incrementCount(itemName) {
+            // Tambah 1 ke jumlah item tersebut
+            inventory[itemName] = (inventory[itemName] || 0) + 1;
             
-            ctx.clearRect(0, 0, canvas.width, canvas.height); // Bersihkan canvas
-
-            model.detect(video).then(predictions => {
-
-                predictions.forEach(prediction => {
-                    if (prediction.score > 0.70) { // Gunakan akurasi lebih tinggi (70%)
-                        const [x, y, width, height] = prediction.bbox;
-
-                        // 2. Gambar Bounding Box (Kotak Hijau)
-                        ctx.strokeStyle = "#4CAF50";
-                        ctx.lineWidth = 2;
-                        ctx.strokeRect(x, y, width, height);
-
-                        // 3. Buat Elemen Tombol/Label
-                        const label = document.createElement('div');
-                        label.className = 'prediction-label';
-                        
-                        // Isi label
-                        label.innerHTML = `
-                            ${prediction.class} 
-                            <button onclick="updateInventory('${prediction.class}', 'add')">+</button>
-                        `;
-
-                        // Posisikan label di atas kotak deteksi
-                        label.style.left = `${x}px`;
-                        label.style.top = `${y - 30}px`; // Naikkan 30px dari atas kotak
-
-                        // 4. Tambahkan ke DOM dan simpan di array currentLabels
-                        cameraArea.appendChild(label);
-                        currentLabels.push(label);
-                    }
-                });
-
-                requestAnimationFrame(detectFrame);
-            });
+            // Perbarui tampilan tabel
+            renderInventoryTable();
+            
+            console.log(`[LOG] ${itemName} dihitung. Total: ${inventory[itemName]}`);
         }
 
-        // --- EKSEKUSI ---
-        async function main() {
-            await setupCamera();
-            video.play();
-            loadModel();
+        // --- 5. FUNGSI UNTUK MEMBUAT TOMBOL ---
+        function setupButtons() {
+            controlArea.innerHTML = ''; // Hapus pesan default
             
-            // Pasang fungsi updateInventory agar bisa diakses dari tombol onclick
-            window.updateInventory = updateInventory; 
+            itemList.forEach(itemName => {
+                // Inisialisasi jumlah awal item
+                inventory[itemName] = 0; 
+                
+                const button = document.createElement('button');
+                button.className = 'counter-btn';
+                button.textContent = `(+) ${itemName}`;
+                
+                // Gunakan fungsi incrementCount saat tombol diklik
+                button.onclick = () => incrementCount(itemName);
+                
+                controlArea.appendChild(button);
+            });
+            
+            // Tambahkan tombol Reset
+            const resetButton = document.createElement('button');
+            resetButton.className = 'counter-btn';
+            resetButton.style.backgroundColor = '#f44336';
+            resetButton.textContent = 'Reset Semua Hitungan';
+            resetButton.onclick = () => {
+                if (confirm("Apakah Anda yakin ingin mereset semua hitungan?")) {
+                    inventory = {}; // Kosongkan inventory
+                    setupButtons(); // Set ulang tombol dan inventory
+                    renderInventoryTable(); // Bersihkan tabel
+                }
+            };
+            controlArea.appendChild(resetButton);
+        }
+
+        // --- EKSEKUSI UTAMA ---
+        async function main() {
+            // 1. Setup tombol (dan menginisialisasi inventory)
+            setupButtons();
+            
+            // 2. Akses dan tampilkan kamera
+            setupCamera();
         }
 
         main();

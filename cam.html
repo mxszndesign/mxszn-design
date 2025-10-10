@@ -2,7 +2,7 @@
 <html lang="id">
 <head>
     <meta charset="UTF-8">
-    <title>Msxzn Camera Object Counter</title>
+    <title>Msxzn Camera Logger</title>
     
     <style>
         body {
@@ -12,10 +12,10 @@
         }
 
         h1 {
-            color: #1a73e8; /* Warna khas Google/Web */
+            color: #1a73e8; 
         }
 
-        #container {
+        #camera-area {
             position: relative; 
             width: 640px;
             height: 480px;
@@ -24,7 +24,6 @@
             box-shadow: 0 4px 8px rgba(0,0,0,0.1);
         }
 
-        /* Video dan Canvas harus ditumpuk agar gambar deteksi berada di atas feed kamera */
         #video, #canvas {
             position: absolute;
             top: 0;
@@ -34,79 +33,104 @@
         }
 
         #video {
-            /* Sedikit transparansi agar bounding box di canvas terlihat jelas */
             opacity: 0.9;
-            transform: scaleX(-1); /* Membalikkan video agar seperti cermin */
         }
         
         #canvas {
-            /* Pastikan canvas ada di lapisan teratas */
             z-index: 10; 
         }
 
-        #counter-display {
-            margin-top: 20px; 
-            padding: 15px;
-            font-size: 1.8em;
-            font-weight: bold;
-            background-color: #333;
-            color: #4CAF50; /* Hijau untuk hasil hitungan */
+        /* Gaya untuk area tombol/label yang digambar di atas canvas */
+        .prediction-label {
+            position: absolute;
+            z-index: 11; /* Lebih tinggi dari canvas */
+            background-color: rgba(255, 255, 255, 0.9);
+            padding: 5px;
+            border-radius: 3px;
+            font-size: 14px;
+            cursor: pointer;
+            border: 2px solid #000000;
+        }
+        .prediction-label button {
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            margin-left: 10px;
+            cursor: pointer;
+            border-radius: 3px;
+        }
+
+        /* Gaya untuk Tabel Hasil */
+        #log-area {
             width: 640px;
-            margin: 20px auto 0;
+            margin: 30px auto;
+            text-align: left;
+        }
+        #inventory-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        #inventory-table th, #inventory-table td {
+            border: 1px solid #ddd;
+            padding: 8px;
+        }
+        #inventory-table th {
+            padding-top: 12px;
+            padding-bottom: 12px;
+            text-align: left;
+            background-color: #1a73e8;
+            color: white;
         }
     </style>
 </head>
 <body>
-    <h1>Msxzn Camera Counter</h1>
+    <h1>Msxzn Camera Inventory Logger</h1>
     
-    <div id="container">
+    <div id="camera-area">
         <video id="video" autoplay muted></video>
-        
         <canvas id="canvas" width="640" height="480"></canvas>
     </div>
     
-    <div id="counter-display">
-        Jumlah Barang Terhitung: <span id="count">0</span>
+    <div id="log-area">
+        <h2>Catatan Barang</h2>
+        <table id="inventory-table">
+            <thead>
+                <tr>
+                    <th>Nama Barang (AI Deteksi)</th>
+                    <th>Jumlah</th>
+                </tr>
+            </thead>
+            <tbody>
+                </tbody>
+        </table>
     </div>
     
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
     
     <script>
-        // Pengaturan global
         const video = document.getElementById('video');
         const canvas = document.getElementById('canvas');
         const ctx = canvas.getContext('2d');
-        const countDisplay = document.getElementById('count');
+        const cameraArea = document.getElementById('camera-area');
+        const tableBody = document.querySelector('#inventory-table tbody');
 
         let model = undefined;
-        let objectCounter = 0;
-        // Set untuk melacak objek yang sudah dihitung agar tidak dihitung berulang-ulang.
-        let countedObjects = new Set(); 
+        // Objek untuk menyimpan ID objek yang sudah ada di tabel (akumulasi)
+        let inventory = {}; 
+        // Array untuk menyimpan elemen tombol di layar, agar bisa dihapus tiap frame
+        let currentLabels = [];
 
-        // --- 1. Definisi Kotak Hitungan (ROI) ---
-        // Di sini saya buat kotak 200x150 di tengah bawah (relatif terhadap canvas 640x480)
-        const ROI = {
-            x: 220, // (640 - 200) / 2
-            y: 300, // Dari atas
-            width: 200,
-            height: 150
-        };
-
-        // --- 2. Inisialisasi Kamera dan Model AI ---
+        // --- FUNGSI UTAMA UNTUK MENGAKSES KAMERA ---
         async function setupCamera() {
             try {
-                // Mencoba mendapatkan feed kamera
                 const stream = await navigator.mediaDevices.getUserMedia({ 
-                    video: { 
-                        facingMode: 'environment' // Coba gunakan kamera belakang (di HP)
-                    } 
+                    video: { facingMode: 'environment' } 
                 });
                 video.srcObject = stream;
                 return new Promise((resolve) => {
-                    video.onloadeddata = () => {
-                        resolve(video);
-                    };
+                    video.onloadeddata = () => { resolve(video); };
                 });
             } catch (err) {
                 console.error("Gagal mengakses kamera:", err);
@@ -114,106 +138,100 @@
             }
         }
 
+        // --- FUNGSI UNTUK MEMUAT MODEL AI ---
         async function loadModel() {
             console.log("Memuat model COCO-SSD...");
-            // Model COCO-SSD digunakan untuk mendeteksi objek umum (botol, cangkir, dll.)
             model = await cocoSsd.load();
             console.log("Model siap. Mulai deteksi.");
             detectFrame();
         }
 
-        // --- 3. Logika Deteksi dan Hitungan Presisi ---
-        function isInsideROI(box) {
-            // box = [y_min, x_min, y_max, x_max] dari hasil deteksi
-            const [x, y, width, height] = box; 
-
-            // Cek apakah pusat (center) objek berada di dalam ROI
-            const centerX = x + width / 2;
-            const centerY = y + height / 2;
-
-            return (
-                centerX >= ROI.x && 
-                centerX <= (ROI.x + ROI.width) &&
-                centerY >= ROI.y && 
-                centerY <= (ROI.y + ROI.height)
-            );
+        // --- FUNGSI UNTUK MENAMBAH/MENGURANGI STOK ---
+        function updateInventory(itemName, action) {
+            // Bersihkan nama item (misal: 'bottle' menjadi 'Bottle')
+            const cleanName = itemName.charAt(0).toUpperCase() + itemName.slice(1);
+            
+            // Tambah jumlah
+            if (action === 'add') {
+                inventory[cleanName] = (inventory[cleanName] || 0) + 1;
+            } 
+            
+            // Perbarui tampilan tabel
+            renderInventoryTable();
         }
 
+        // --- FUNGSI UNTUK MEMPERBARUI TABEL ---
+        function renderInventoryTable() {
+            tableBody.innerHTML = ''; // Kosongkan isi tabel
+            
+            for (const item in inventory) {
+                if (inventory[item] > 0) {
+                    const row = tableBody.insertRow();
+                    const nameCell = row.insertCell(0);
+                    const countCell = row.insertCell(1);
+
+                    nameCell.textContent = item;
+                    countCell.textContent = inventory[item];
+                }
+            }
+        }
+        
+        // --- FUNGSI DETEKSI DAN GAMBAR TOMBOL ---
         function detectFrame() {
-            // Periksa apakah video siap dan model AI telah dimuat
             if (video.readyState !== 4 || !model) {
                 requestAnimationFrame(detectFrame);
                 return;
             }
 
-            // Lakukan deteksi objek dari frame video saat ini
-            model.detect(video).then(predictions => {
-                // Bersihkan canvas dari gambar sebelumnya
-                ctx.clearRect(0, 0, canvas.width, canvas.height);
-                
-                // Gambar Kotak Hitungan (ROI) - Area Fokus Anda
-                ctx.strokeStyle = "red";
-                ctx.lineWidth = 3;
-                ctx.strokeRect(ROI.x, ROI.y, ROI.width, ROI.height);
-                ctx.fillStyle = "rgba(255, 0, 0, 0.1)"; 
-                ctx.fillRect(ROI.x, ROI.y, ROI.width, ROI.height);
-                ctx.font = '16px Arial';
-                ctx.fillStyle = 'red';
-                ctx.fillText('KOTAK HITUNGAN', ROI.x, ROI.y - 5);
+            // 1. Hapus semua tombol dari frame sebelumnya
+            currentLabels.forEach(label => label.remove());
+            currentLabels = [];
+            
+            ctx.clearRect(0, 0, canvas.width, canvas.height); // Bersihkan canvas
 
-                let currentFrameObjects = new Set(); // Objek yang terdeteksi di frame ini
+            model.detect(video).then(predictions => {
 
                 predictions.forEach(prediction => {
-                    // Gunakan hanya deteksi dengan kepercayaan tinggi
-                    if (prediction.score > 0.65) {
+                    if (prediction.score > 0.70) { // Gunakan akurasi lebih tinggi (70%)
                         const [x, y, width, height] = prediction.bbox;
 
-                        // 1. Gambar Bounding Box Objek
-                        ctx.strokeStyle = "green";
+                        // 2. Gambar Bounding Box (Kotak Hijau)
+                        ctx.strokeStyle = "#4CAF50";
                         ctx.lineWidth = 2;
                         ctx.strokeRect(x, y, width, height);
-                        ctx.fillStyle = "green";
-                        ctx.fillText(`${prediction.class} (${Math.round(prediction.score * 100)}%)`, x, y > 10 ? y - 5 : 10);
 
-                        // 2. Terapkan Logika Hitungan Presisi
-                        if (isInsideROI(prediction.bbox)) {
-                            // Buat ID unik berdasarkan kelas dan perkiraan posisi
-                            const objectId = `${prediction.class}-${Math.floor(x/10)}-${Math.floor(y/10)}`; 
+                        // 3. Buat Elemen Tombol/Label
+                        const label = document.createElement('div');
+                        label.className = 'prediction-label';
+                        
+                        // Isi label
+                        label.innerHTML = `
+                            ${prediction.class} 
+                            <button onclick="updateInventory('${prediction.class}', 'add')">+</button>
+                        `;
 
-                            // Hitung hanya jika objek ini belum pernah tercatat di countedObjects
-                            if (!countedObjects.has(objectId)) {
-                                objectCounter++;
-                                countedObjects.add(objectId);
-                                countDisplay.textContent = objectCounter;
+                        // Posisikan label di atas kotak deteksi
+                        label.style.left = `${x}px`;
+                        label.style.top = `${y - 30}px`; // Naikkan 30px dari atas kotak
 
-                                // Visualisasi: Ubah warna kotak saat hitungan terjadi
-                                ctx.strokeStyle = "blue"; 
-                                ctx.strokeRect(x, y, width, height);
-                                ctx.fillStyle = "blue";
-                                ctx.fillText("DIHITUNG!", x, y + 15);
-                            }
-                            
-                            // Tambahkan ID objek ke set objek yang ada di frame saat ini
-                            currentFrameObjects.add(objectId);
-                        }
+                        // 4. Tambahkan ke DOM dan simpan di array currentLabels
+                        cameraArea.appendChild(label);
+                        currentLabels.push(label);
                     }
                 });
-                
-                // Pembersihan Set: Hapus objek yang sudah tidak terlihat/berada di luar frame
-                // Ini adalah pelacakan yang sangat sederhana.
-                countedObjects = new Set([...countedObjects].filter(id => currentFrameObjects.has(id)));
 
-
-                // Ulangi proses pada frame berikutnya
                 requestAnimationFrame(detectFrame);
             });
         }
 
-        // --- 4. Fungsi Utama untuk Memulai ---
+        // --- EKSEKUSI ---
         async function main() {
             await setupCamera();
             video.play();
             loadModel();
+            
+            // Pasang fungsi updateInventory agar bisa diakses dari tombol onclick
+            window.updateInventory = updateInventory; 
         }
 
         main();

@@ -2,7 +2,7 @@
 <html lang="id">
 <head>
     <meta charset="UTF-8">
-    <title>Msxzn Manual Camera Logger</title>
+    <title>Msxzn Smart Manual Logger</title>
     
     <style>
         body {
@@ -14,20 +14,31 @@
         h1 {
             color: #1a73e8; 
         }
+        
+        #status-bar {
+            width: 640px;
+            margin: 10px auto;
+            padding: 10px;
+            font-weight: bold;
+            border-radius: 5px;
+            color: white;
+        }
+        .status-ready { background-color: #4CAF50; } /* Hijau */
+        .status-wait { background-color: #f44336; }  /* Merah */
 
         #camera-area {
             width: 640px;
             height: 480px;
-            margin: 20px auto;
+            margin: 10px auto;
             border: 5px solid #333;
             box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-            overflow: hidden; /* Pastikan video pas di dalam */
+            overflow: hidden;
         }
 
         #video {
             width: 100%;
             height: 100%;
-            object-fit: cover; /* Pastikan video mengisi area */
+            object-fit: cover;
             opacity: 0.9;
         }
         
@@ -39,7 +50,7 @@
             border: 1px solid #ccc;
             background-color: #fff;
             display: flex;
-            flex-wrap: wrap; /* Biar tombol bisa ke bawah */
+            flex-wrap: wrap;
             justify-content: center;
             gap: 10px;
         }
@@ -55,8 +66,14 @@
             transition: background-color 0.3s;
         }
         
-        .counter-btn:hover {
+        .counter-btn:hover:not(:disabled) {
             background-color: #45a049;
+        }
+        
+        /* Gaya tombol saat filter aktif (dinonaktifkan) */
+        .counter-btn:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
         }
 
         /* Gaya untuk Tabel Hasil */
@@ -83,14 +100,16 @@
     </style>
 </head>
 <body>
-    <h1>Msxzn Manual Camera Logger</h1>
+    <h1>Msxzn Smart Manual Logger</h1>
     
+    <div id="status-bar" class="status-wait">FILTER AKTIF: Letakkan Barang di Depan Kamera</div>
+
     <div id="camera-area">
         <video id="video" autoplay muted></video>
     </div>
     
     <div id="control-area">
-        <p>Tombol untuk setiap item akan muncul di sini. Klik (+) setiap kali item masuk frame.</p>
+        <p>Tombol akan muncul di sini.</p>
     </div>
     
     <div id="log-area">
@@ -107,13 +126,19 @@
         </table>
     </div>
     
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
+    
     <script>
         const video = document.getElementById('video');
         const controlArea = document.getElementById('control-area');
         const tableBody = document.getElementById('inventory-body');
+        const statusBar = document.getElementById('status-bar');
+
+        let model = undefined;
+        let isReadyToCount = false; // Status filterisasi
 
         // --- 1. DAFTAR BARANG YANG AKAN DIHITUNG ---
-        // Anda bisa tambahkan atau ganti nama-nama barang di sini
         const itemList = [
             'Kartu A',
             'Kartu B',
@@ -122,66 +147,110 @@
             'Kotak Kecil'
         ];
         
-        // Objek untuk menyimpan jumlah saat ini
         let inventory = {}; 
 
-        // --- 2. SETUP KAMERA ---
+        // --- 2. SETUP KAMERA & MODEL AI ---
         async function setupCamera() {
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({ 
-                    video: { facingMode: 'environment' } // Coba kamera belakang
+                    video: { facingMode: 'environment' } 
                 });
                 video.srcObject = stream;
                 video.play();
+                video.onloadeddata = loadModel; // Lanjut muat model setelah video siap
             } catch (err) {
                 console.error("Gagal mengakses kamera:", err);
-                alert("Gagal mengakses kamera. Pastikan izin kamera diberikan melalui server web (http://).");
+                statusBar.textContent = "ERROR: Gagal akses kamera. Cek izin browser!";
+                statusBar.className = "status-wait";
             }
         }
 
-        // --- 3. FUNGSI UNTUK MEMPERBARUI TABEL ---
+        async function loadModel() {
+            statusBar.textContent = "Memuat model filter AI...";
+            statusBar.className = "status-wait";
+            model = await cocoSsd.load();
+            statusBar.textContent = "Model Filter AI Siap. Tunggu Objek Terdeteksi.";
+            detectFrame(); // Mulai deteksi untuk filterisasi
+        }
+
+        // --- 3. LOGIKA FILTERISASI (Deteksi Objek) ---
+        function detectFrame() {
+            if (video.readyState !== 4 || !model) {
+                requestAnimationFrame(detectFrame);
+                return;
+            }
+
+            model.detect(video).then(predictions => {
+                // Filter prediksi yang akurat
+                const filteredPredictions = predictions.filter(p => p.score > 0.60); // Akurasi 60% cukup
+
+                const wasReady = isReadyToCount;
+                
+                if (filteredPredictions.length > 0) {
+                    // ADA OBJEK
+                    isReadyToCount = true;
+                    if (!wasReady) {
+                        statusBar.textContent = `SIAP HITUNG! ${filteredPredictions.length} objek terdeteksi.`;
+                        statusBar.className = "status-ready";
+                        toggleButtons(true);
+                    }
+                } else {
+                    // TIDAK ADA OBJEK
+                    isReadyToCount = false;
+                    if (wasReady) {
+                        statusBar.textContent = "FILTER AKTIF: Letakkan Barang di Depan Kamera";
+                        statusBar.className = "status-wait";
+                        toggleButtons(false);
+                    }
+                }
+
+                requestAnimationFrame(detectFrame);
+            });
+        }
+        
+        // --- 4. FUNGSI UNTUK MENGAKTIFKAN/MENONAKTIFKAN TOMBOL ---
+        function toggleButtons(enable) {
+            const buttons = controlArea.querySelectorAll('.counter-btn');
+            buttons.forEach(btn => {
+                // Pastikan tombol reset tidak dinonaktifkan
+                if (btn.id !== 'reset-btn') {
+                    btn.disabled = !enable;
+                }
+            });
+        }
+
+        // --- 5. LOGIKA UTAMA HITUNGAN MANUAL ---
         function renderInventoryTable() {
-            tableBody.innerHTML = ''; // Kosongkan isi tabel
-            
-            // Loop melalui setiap item yang ada di objek inventory
+            tableBody.innerHTML = '';
             for (const item in inventory) {
                 const count = inventory[item];
-                // Hanya tampilkan jika jumlahnya lebih dari 0
                 if (count > 0) {
                     const row = tableBody.insertRow();
-                    const nameCell = row.insertCell(0);
-                    const countCell = row.insertCell(1);
-
-                    nameCell.textContent = item;
-                    countCell.textContent = count;
+                    row.insertCell(0).textContent = item;
+                    row.insertCell(1).textContent = count;
                 }
             }
         }
         
-        // --- 4. FUNGSI UNTUK MENAMBAH HITUNGAN ---
         function incrementCount(itemName) {
-            // Tambah 1 ke jumlah item tersebut
+            if (!isReadyToCount) return; // JAGA-JAGA: Cegah hitungan jika filter belum siap
+
             inventory[itemName] = (inventory[itemName] || 0) + 1;
-            
-            // Perbarui tampilan tabel
             renderInventoryTable();
-            
-            console.log(`[LOG] ${itemName} dihitung. Total: ${inventory[itemName]}`);
         }
 
-        // --- 5. FUNGSI UNTUK MEMBUAT TOMBOL ---
+        // --- 6. MEMBUAT TOMBOL AWAL ---
         function setupButtons() {
-            controlArea.innerHTML = ''; // Hapus pesan default
+            controlArea.innerHTML = '';
             
             itemList.forEach(itemName => {
-                // Inisialisasi jumlah awal item
                 inventory[itemName] = 0; 
                 
                 const button = document.createElement('button');
                 button.className = 'counter-btn';
                 button.textContent = `(+) ${itemName}`;
+                button.disabled = true; // Nonaktifkan secara default
                 
-                // Gunakan fungsi incrementCount saat tombol diklik
                 button.onclick = () => incrementCount(itemName);
                 
                 controlArea.appendChild(button);
@@ -189,14 +258,17 @@
             
             // Tambahkan tombol Reset
             const resetButton = document.createElement('button');
+            resetButton.id = 'reset-btn';
             resetButton.className = 'counter-btn';
             resetButton.style.backgroundColor = '#f44336';
             resetButton.textContent = 'Reset Semua Hitungan';
             resetButton.onclick = () => {
                 if (confirm("Apakah Anda yakin ingin mereset semua hitungan?")) {
-                    inventory = {}; // Kosongkan inventory
-                    setupButtons(); // Set ulang tombol dan inventory
-                    renderInventoryTable(); // Bersihkan tabel
+                    inventory = {}; 
+                    setupButtons(); 
+                    renderInventoryTable();
+                    // Pastikan tombol diaktifkan/dinonaktifkan sesuai status AI saat ini
+                    toggleButtons(isReadyToCount);
                 }
             };
             controlArea.appendChild(resetButton);
@@ -204,11 +276,10 @@
 
         // --- EKSEKUSI UTAMA ---
         async function main() {
-            // 1. Setup tombol (dan menginisialisasi inventory)
             setupButtons();
-            
-            // 2. Akses dan tampilkan kamera
             setupCamera();
+            // Pasang fungsi incrementCount agar bisa diakses dari tombol onclick
+            window.incrementCount = incrementCount; 
         }
 
         main();

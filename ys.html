@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Msxzn Blink Game: Deteksi Kedipan Web</title>
+    
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.13.0/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4.1633559619/face_mesh.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/face-landmarks-detection@0.0.1/dist/face-landmarks-detection.min.js"></script>
+
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: sans-serif;
+            text-align: center;
+            background-color: #333;
+            color: white;
+        }
+
+        /* Container utama game */
+        #game-container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background-color: #1a1a1a;
+            transition: background-color 0.5s;
+        }
+
+        /* Elemen video untuk stream kamera (Disembunyikan) */
+        #webcam {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            opacity: 0;
+            z-index: -1;
+        }
+
+        /* Canvas untuk menggambar overlay deteksi (opsional) */
+        #output-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 5;
+        }
+
+        /* Overlay hitam untuk efek kedipan */
+        #overlay-hitam {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: black;
+            opacity: 0; /* Mulai transparan */
+            transition: opacity 0.05s ease-in-out; /* Transisi cepat */
+            pointer-events: none;
+            z-index: 1000;
+        }
+
+        /* Style untuk UI Game */
+        #info-box {
+            position: relative;
+            z-index: 10;
+            padding: 20px;
+            background: rgba(0, 0, 0, 0.7);
+            border-radius: 10px;
+        }
+        #status-teks {
+            font-size: 2em;
+            margin-top: 10px;
+            color: yellow;
+        }
+        #msxzn-brand {
+            position: absolute;
+            bottom: 10px;
+            right: 10px;
+            font-size: 0.8em;
+            color: rgba(255, 255, 255, 0.5);
+        }
+    </style>
+</head>
+<body>
+
+    <video id="webcam" autoplay playsinline></video>
+    <canvas id="output-canvas"></canvas>
+
+    <div id="game-container">
+        <div id="info-box">
+            <h1>Game Kedipan Mata</h1>
+            <p>Izinkan akses kamera dan mulai kedipkan mata Anda untuk membuat layar berkedip.</p>
+            <p id="ear-display">EAR Kiri: N/A | EAR Kanan: N/A</p>
+            <h2 id="status-teks">Menunggu Deteksi...</h2>
+            <button id="start-button">Mulai Kamera</button>
+        </div>
+        <p id="msxzn-brand">Powered by Msxzn</p>
+    </div>
+
+    <div id="overlay-hitam"></div>
+
+    <script>
+        const webcamElement = document.getElementById('webcam');
+        const overlayElement = document.getElementById('overlay-hitam');
+        const statusText = document.getElementById('status-teks');
+        const startButton = document.getElementById('start-button');
+        const earDisplay = document.getElementById('ear-display');
+        
+        let model, stream;
+        let isBlinking = false;
+        const BLINK_THRESHOLD = 0.20; // Ambang batas untuk mendeteksi kedipan (dapat disesuaikan)
+
+        // --- Fungsi Bantuan Matematika (Euclidean Distance & EAR) ---
+        // Menghitung jarak Euclidean antara dua titik
+        function distance(p1, p2) {
+            return Math.sqrt(Math.pow(p2.x - p1.x, 2) + Math.pow(p2.y - p1.y, 2));
+        }
+
+        // Menghitung Eye Aspect Ratio (EAR) - Disederhanakan
+        function calculateEAR(points) {
+            // Kita akan menggunakan subset titik dari FaceMesh API
+            // p1, p2, p3, p4 = titik horizontal (sudut mata)
+            // p5, p6 = titik vertikal (kelopak mata atas/bawah)
+            // Indeks ini hanya perkiraan untuk ilustrasi:
+            // FaceMesh menggunakan sekitar 468 titik. 
+            // Implementasi nyata perlu menggunakan indeks yang tepat (misalnya: [386, 374, 380, 373, 390, 249] untuk mata kanan)
+
+            // Karena kita menggunakan model face-landmarks-detection TF.js, 
+            // kita harus memetakan koordinat ke formula Daugman (EAR).
+            // Anda akan menggunakan koordinat yang dikembalikan oleh model. 
+            // Logika ini harus dilakukan di dalam loop deteksi.
+            
+            // Untuk simulasi ini, kita anggap points adalah objek yang berisi koordinat
+            // pA: kelopak mata atas, pB: kelopak mata bawah, pC: sudut kiri, pD: sudut kanan
+            // Asumsi: Points adalah array [p1, p2, p3, p4, p5, p6]
+            
+            // Jarak vertikal (rata-rata)
+            const d_v = (distance(points[1], points[5]) + distance(points[2], points[4])) / 2;
+            // Jarak horizontal
+            const d_h = distance(points[0], points[3]);
+            
+            if (d_h === 0) return 1.0; // Hindari pembagian dengan nol
+            
+            return d_v / d_h; 
+        }
+
+        // --- Logika Game dan Visual ---
+        function handleBlinkAction(earValue) {
+            if (earValue < BLINK_THRESHOLD) {
+                // Kedipan terdeteksi
+                if (!isBlinking) {
+                    isBlinking = true;
+                    // Layar menjadi hitam
+                    overlayElement.style.opacity = 1; 
+                    statusText.textContent = "KEDIPAN! 🌑";
+                }
+            } else {
+                // Mata terbuka
+                if (isBlinking) {
+                    isBlinking = false;
+                    // Layar kembali normal
+                    overlayElement.style.opacity = 0;
+                    statusText.textContent = "Mata Terbuka. 👀";
+                    // Lakukan Aksi Game di sini (misal: tambah skor)
+                }
+            }
+        }
+
+        // --- Alur Utama Deteksi ML ---
+        async function detectFaces() {
+            // Model hanya akan berjalan jika ada stream kamera yang aktif
+            if (!webcamElement.srcObject) {
+                statusText.textContent = "Kamera Belum Aktif.";
+                return;
+            }
+
+            const faces = await model.estimateFaces({
+                input: webcamElement,
+                // Model fast karena hanya perlu mendeteksi landmark
+                flipHorizontal: false 
+            });
+
+            if (faces.length > 0) {
+                statusText.textContent = "Deteksi Wajah OK. Mencari Kedipan...";
+                const face = faces[0];
+                const landmarks = face.landmarks;
+                
+                // Indeks landmark mata (gunakan indeks yang tepat untuk model yang digunakan)
+                // Anggap: 
+                // Right Eye Indices (berdasarkan Face Mesh/TF.js) - Contoh: 33, 133, 160, 144, 153, 172
+                // Left Eye Indices - Contoh: 362, 263, 387, 373, 380, 382
+                
+                // Gunakan fungsi pustaka yang lebih stabil jika tersedia, 
+                // atau definisikan set indeks yang akurat:
+                
+                // Contoh Sederhana menggunakan titik yang umum (HARUS DIUBAH dengan indeks ASLI)
+                // Kita akan gunakan fungsi dummy EAR yang mengasumsikan kita punya data yang tepat:
+                
+                // Titik kunci mata kanan (contoh):
+                const rightEyeLandmarks = [landmarks[33], landmarks[133], landmarks[160], landmarks[144], landmarks[153], landmarks[172]];
+                // Titik kunci mata kiri (contoh):
+                const leftEyeLandmarks = [landmarks[362], landmarks[263], landmarks[387], landmarks[373], landmarks[380], landmarks[382]];
+                
+                // Hitung EAR (di sini kita gunakan fungsi dummy, implementasi nyata harus akurat)
+                const earRight = calculateEAR(rightEyeLandmarks);
+                const earLeft = calculateEAR(leftEyeLandmarks);
+                
+                // Tampilkan nilai EAR (penting untuk debugging)
+                earDisplay.textContent = `EAR Kiri: ${earLeft.toFixed(2)} | EAR Kanan: ${earRight.toFixed(2)}`;
+
+                // Gunakan nilai EAR terkecil (jika salah satu mata kedip, layar berkedip)
+                const minEar = Math.min(earRight, earLeft);
+                
+                handleBlinkAction(minEar);
+
+            } else {
+                statusText.textContent = "Wajah Tidak Terdeteksi. 😟";
+                earDisplay.textContent = `EAR Kiri: N/A | EAR Kanan: N/A`;
+            }
+
+            // Loop rekursif untuk terus mendeteksi (sekitar 30 frame per detik)
+            requestAnimationFrame(detectFaces);
+        }
+
+        // --- Inisialisasi Aplikasi ---
+        async function setupCamera() {
+            try {
+                // Minta izin kamera
+                stream = await navigator.mediaDevices.getUserMedia({ video: true });
+                webcamElement.srcObject = stream;
+                
+                // Tunggu sampai video metadata dimuat untuk memastikan resolusi benar
+                await new Promise((resolve) => {
+                    webcamElement.onloadedmetadata = () => {
+                        resolve(true);
+                    };
+                });
+                
+                // Muat model ML
+                statusText.textContent = "Memuat Model ML...";
+                model = await faceLandmarksDetection.load(
+                    faceLandmarksDetection.SupportedModels.MediaPipeFaceMesh, 
+                    {maxFaces: 1} // Hanya lacak 1 wajah untuk performa
+                );
+
+                statusText.textContent = "Model Siap! Mulai Deteksi...";
+                // Mulai loop deteksi
+                detectFaces();
+                
+            } catch (error) {
+                console.error("Gagal mengakses kamera atau memuat model:", error);
+                statusText.textContent = "ERROR: Akses kamera ditolak atau masalah model.";
+            } finally {
+                startButton.style.display = 'none'; // Sembunyikan tombol setelah mulai
+            }
+        }
+        
+        // Event Listener untuk memulai proses
+        startButton.addEventListener('click', setupCamera);
+        
+        // Pastikan model dimuat hanya setelah tombol diklik
+        statusText.textContent = "Klik 'Mulai Kamera' untuk memulai!";
+
+    </script>
+</body>
+</html>
